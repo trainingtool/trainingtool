@@ -9,11 +9,14 @@ const int kHolesPerWheel = 2;
 
 unsigned long lastWheelTime = 0;
 
-unsigned long cRpmsSinceLastReport = 0;
-float flRpmSumSinceLastReport = 0;
+unsigned long cRpmsSinceLastStore = 0;
+float flRpmSumSinceLastStore = 0;
 
-unsigned long cStrainsSinceLastReport=0;
-float flStrainSumSinceLastReport=0;
+unsigned long cRpmsSinceLastPrint = 0;
+float flRpmSumSinceLastPrint = 0;
+
+unsigned long cStrainsSinceLastStore=0;
+float flStrainSumSinceLastStore=0;
 
 
 unsigned int loops = 0;
@@ -31,7 +34,7 @@ typedef long long int32;
 #endif
 
 struct HistoryData {
-  const static int32 kCount = 5;
+  const static int32 kCount = 100;
   float rgSpeeds[kCount];
   float rgValues[kCount];
   int cForcePoints;
@@ -95,24 +98,30 @@ float getCurrentStrain()
   // Calculate load by interpolation 
   const float load_Strain1 = slopeCalibration * (newReading_Strain1 - ReadingA_Strain1) + LoadA_Strain1;
   
-  return newReading_Strain1;
+  return load_Strain1;
 }
 
 void loop() 
 {
   loops++;
   
-  flStrainSumSinceLastReport += getCurrentStrain();
-  cStrainsSinceLastReport++;
+  float flCurrentStrain = getCurrentStrain();
+  
+  {
+    noInterrupts();
+    flStrainSumSinceLastStore += flCurrentStrain;
+    cStrainsSinceLastStore++;
+    interrupts();
+  }
   
   // millis returns the number of milliseconds since the board started the current program
   const long tmNow = millis();
-  if(tmNow > time_step+lastPrintTime && cRpmsSinceLastReport > 0) {
+  if(tmNow > time_step+lastPrintTime && cRpmsSinceLastPrint > 0) {
     
     // get the RPM, convert RPM to power
-    float flRPMNow = flRpmSumSinceLastReport / cRpmsSinceLastReport;
-    flRpmSumSinceLastReport = 0;
-    cRpmsSinceLastReport = 0;
+    float flRPMNow = flRpmSumSinceLastPrint / cRpmsSinceLastPrint;
+    flRpmSumSinceLastPrint = 0;
+    cRpmsSinceLastPrint = 0;
     
     float flSlopeNow = CalculateSlope();
     float flImpliedPower = flRPMNow * flSlopeNow;
@@ -124,13 +133,26 @@ void loop()
     Serial.print("\t");
     Serial.print(flRPMNow);
     Serial.print("\t");
-    Serial.println(flImpliedPower);
+    Serial.print(flImpliedPower);
     Serial.print("\t");
-    Serial.println(flSlopeNow);
+    Serial.print(flSlopeNow);
     Serial.print("\t");
-    Serial.println(historyCounter.cForcePoints);
+    Serial.print(historyCounter.cForcePoints);
     Serial.print("\t");
     Serial.println(historyCounter.ixUpdatePoint);
+    
+    if(historyCounter.ixUpdatePoint == 99)
+    {
+      for(int x = 0;x < historyCounter.ixUpdatePoint; x++)
+      {
+        Serial.print(historyCounter.rgSpeeds[x]);
+        Serial.print("\t");
+        Serial.println(historyCounter.rgValues[x]);
+      }
+      historyCounter.ixUpdatePoint = 0;
+    }
+    
+    
     lastPrintTime = tmNow;
   }
 }
@@ -146,17 +168,36 @@ void countWheel()
       float rpmW = 60.*1000000./((float)dtW);
       rpmW /= kHolesPerWheel;
       
-      const float flStrainNowKg = flStrainSumSinceLastReport / cStrainsSinceLastReport;
-      cStrainsSinceLastReport = 0;
-      flStrainSumSinceLastReport = 0;
-      const float flStrainNowN = flStrainNowKg*9.8;
-      const float flSpeedNowMs = rpmW / 60 * 0.7*3.14159;
-      const float flPowerNow = flStrainNowN*flSpeedNowMs;
+      {
+        noInterrupts();
+        cRpmsSinceLastPrint++;
+        flRpmSumSinceLastPrint += rpmW;
+        
+        cRpmsSinceLastStore++;
+        flRpmSumSinceLastStore += rpmW;
+        interrupts();
+      }
       
-      
-      HandleDataReport(rpmW, flPowerNow);
-      
-      cRpmsSinceLastReport++;
-      flRpmSumSinceLastReport += rpmW;
+      if(cRpmsSinceLastStore > 10)
+      {
+        const float flRpmNow = flRpmSumSinceLastStore / cRpmsSinceLastStore;
+        cRpmsSinceLastStore = 0;
+        flRpmSumSinceLastStore = 0;
+        
+        float flStrainNowKg=0;
+        {
+          noInterrupts();
+          flStrainNowKg = flStrainSumSinceLastStore / cStrainsSinceLastStore;
+          cStrainsSinceLastStore = 0;
+          flStrainSumSinceLastStore = 0;
+          interrupts();
+        }
+        const float flStrainNowN = flStrainNowKg*9.8;
+        const float flSpeedNowMs = flRpmNow / 60 * 0.7*3.14159;
+        const float flPowerNow = flStrainNowN*flSpeedNowMs;
+        
+        HandleDataReport(flRpmNow, flPowerNow);
+      }
     }
+    
 }
