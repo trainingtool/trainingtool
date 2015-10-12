@@ -202,10 +202,10 @@ public class MainActivity  extends BlunoLibrary {
         TextView tvSlope = (TextView)this.findViewById(R.id.txtSlope);
         TextView tvTurns = (TextView)this.findViewById(R.id.txtTurns);
 
-        tvPower.setText("Power: " + mTrainerState.getPower() + "W");
-        tvSpeed.setText("Speed: " + mTrainerState.getSpeedMs()*3.6 + "km/h");
-        tvSlope.setText("Slope: " + mTrainerState.getSlope() + "W/m/s");
-        tvTurns.setText("Turns: " + mTrainerState.getTurns() + "");
+        tvPower.setText("Power: " + (int)mTrainerState.getPower() + "W");
+        tvSpeed.setText("Speed: " + String.format("%.1f",mTrainerState.getSpeedMs()*3.6) + "km/h");
+        tvSlope.setText("Slope: " + String.format("%.2f",mTrainerState.getSlope()) + "W/m/s");
+        tvTurns.setText("Turns: " + (int)mTrainerState.getTurns() + "");
 
         mSlopeChart.setChartData(mTrainerState.getPointData(), mTrainerState.getSlope());
     }
@@ -216,12 +216,19 @@ public class MainActivity  extends BlunoLibrary {
         // we got a string!
         // format is:
         // <type of transmission>:<bunch of comma-separated parameters>
-        { // simulatin'...
+
+        /*{ // simulatin'...
             cPoint = (cPoint + 1) % 100;
             final float flSimSpeed = (float)(Math.random()*10);
             final float flSimPower = (float)(5*flSimSpeed + Math.random()*5);
             this.parseSerial(TrainerState.POINT + ":" + flSimSpeed + "," + flSimPower + "," + cPoint);
-        }
+            this.parseSerial(TrainerState.POWER + ":" + flSimPower);
+            this.parseSerial(TrainerState.SLOPE + ":" + Math.random()*5);
+            this.parseSerial(TrainerState.SPEED + ":" + flSimSpeed);
+            this.parseSerial(TrainerState.WHEELTURNS + ":" + cPoint);
+        }*/
+        D.p("String: '" + theString + "'");
+        parseSerial(theString);
 
         refreshUI();
         mSlopeChart.invalidate();
