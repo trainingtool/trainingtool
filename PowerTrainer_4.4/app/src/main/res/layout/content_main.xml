@@ -9,20 +9,61 @@
     app:layout_behavior="@string/appbar_scrolling_view_behavior"
     tools:showIn="@layout/activity_main" tools:context=".MainActivity">
 
-    <TextView android:text="Hello World!" android:layout_width="wrap_content"
-        android:layout_height="wrap_content" />
-
     <LinearLayout
         android:orientation="vertical"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_alignParentTop="true"
+        android:layout_alignParentBottom="true"
         android:layout_alignParentStart="true">
 
         <Button
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Scan"
-            android:id="@+id/scan" />
+            android:id="@+id/scan"
+            android:layout_gravity="right"
+            android:layout_alignParentBottom="true"
+            android:layout_alignParentEnd="true" />
+
+        <TextView android:text="Power" android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/txtPower"
+            android:textSize="@dimen/power_label" />
+
+        <TextView
+            android:text="Turns"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/txtTurns"
+            android:textSize="@dimen/power_label" />
+
+        <TextView
+            android:text="Speed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/txtSpeed"
+            android:textSize="@dimen/power_label" />
+
+        <TextView
+            android:text="Slope"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/txtSlope"
+            android:textSize="@dimen/power_label" />
+
+        <com.stac.powertrainer_44.SlopeChart
+            android:background="#ccc"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:paddingLeft="20dp"
+            android:paddingBottom="40dp"
+            app:exampleDimension="24sp"
+            app:exampleColor="#33b5e5"
+            app:exampleString="Hello, SlopeChart"
+            app:exampleDrawable="@android:drawable/ic_menu_add"
+            android:id="@+id/viewChart" />
+
+
     </LinearLayout>
+
 </RelativeLayout>

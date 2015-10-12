@@ -17,6 +17,7 @@ public class MainActivity  extends BlunoLibrary {
     private Button buttonSerialSend;
     private EditText serialSendText;
     private TrainerState mTrainerState = new TrainerState();
+    private SlopeChart mSlopeChart;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -34,6 +35,8 @@ public class MainActivity  extends BlunoLibrary {
                 buttonScanOnClickProcess();										//Alert Dialog for selecting the BLE device
             }
         }); // end setOnClickListener
+
+        mSlopeChart = (SlopeChart)findViewById(R.id.viewChart);
     }
 
     protected void onResume(){
@@ -99,22 +102,27 @@ public class MainActivity  extends BlunoLibrary {
         public static final int SLOPE = 3;
         public static final int WHEELTURNS = 4;
 
-        private class XYPoint
-        {
-            public float x = 0;
-            public float y = 0;
-            public XYPoint(float _x, float _y)
-            {
-                this.x = _x;
-                this.y = _y;
-            }
-        }
         private int cWheelTurns;
         private float flEstimatedSlope; // slope for y=mx, where x = speed, y = watts
         private Vector<XYPoint> lstPoints = new Vector<XYPoint>();
         private float flLastPower;
         private float flLastSpeed;
 
+        public float getSpeedMs() {
+            return flLastSpeed;
+        }
+        public float getPower() {
+            return flLastPower;
+        }
+        public int getTurns() {
+            return cWheelTurns;
+        }
+        public float getSlope() {
+            return flEstimatedSlope;
+        }
+        public Vector<XYPoint> getPointData() {
+            return lstPoints;
+        }
         public void addPoint(float speed, float watts, int index)
         {
             if(lstPoints.size() == index) {
@@ -188,14 +196,36 @@ public class MainActivity  extends BlunoLibrary {
         }
     }
 
-    @Override
-    public void onSerialReceived(String theString) {							//Once connection data received, this function will be called
-        D.p("onSerialReceived " + theString);
+    private void refreshUI() {
+        TextView tvPower = (TextView)this.findViewById(R.id.txtPower);
+        TextView tvSpeed = (TextView)this.findViewById(R.id.txtSpeed);
+        TextView tvSlope = (TextView)this.findViewById(R.id.txtSlope);
+        TextView tvTurns = (TextView)this.findViewById(R.id.txtTurns);
 
+        tvPower.setText("Power: " + mTrainerState.getPower() + "W");
+        tvSpeed.setText("Speed: " + mTrainerState.getSpeedMs()*3.6 + "km/h");
+        tvSlope.setText("Slope: " + mTrainerState.getSlope() + "W/m/s");
+        tvTurns.setText("Turns: " + mTrainerState.getTurns() + "");
+
+        mSlopeChart.setChartData(mTrainerState.getPointData(), mTrainerState.getSlope());
+    }
+
+    int cPoint = 99;
+    @Override
+    public void onSerialReceived(String theString) {
         // we got a string!
         // format is:
         // <type of transmission>:<bunch of comma-separated parameters>
-        this.parseSerial(TrainerState.POINT + ":5.5,4.3,2");
+        { // simulatin'...
+            cPoint = (cPoint + 1) % 100;
+            final float flSimSpeed = (float)(Math.random()*10);
+            final float flSimPower = (float)(5*flSimSpeed + Math.random()*5);
+            this.parseSerial(TrainerState.POINT + ":" + flSimSpeed + "," + flSimPower + "," + cPoint);
+        }
+
+        refreshUI();
+        mSlopeChart.invalidate();
+        // this is called on the UI thread, so we can do a refreshUI now
     }
 
 }
