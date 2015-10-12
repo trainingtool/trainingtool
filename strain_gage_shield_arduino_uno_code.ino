@@ -37,16 +37,45 @@ struct HistoryData {
   const static int32 kCount = 100;
   float rgSpeeds[kCount];
   float rgValues[kCount];
-  int cForcePoints;
-  int ixUpdatePoint;
+  int cForcePoints; // how many valid points are in rgSpeeds/rgValues?
+  int ixUpdatePoint; // what is the next point we're going to update in rgSpeeds/rgValues?
   float flLastSlope;
+  float flLastPower;
+  float flLastSpeed;
+};
+
+// keeps track of the last time we sent each bit of data
+struct ReportCounter
+{
+  const static int POWER_CODE = 0;
+  const static int powerInterval = 500;
+  long tmLastPower;
+
+  const static int SLOPE_CODE = 3;
+  const static int slopeInterval = 5000;
+  long tmLastSlope;
+
+  const static int WHEELTURNS_CODE = 4;
+  const static int countInterval = 2000;
+  long tmLastCount;
+
+  const static int SPEED_CODE = 1;
+  const static int speedInterval = 5000;
+  long tmLastSpeed;
+
+  const static int POINT_CODE = 2;
+  const static int pointInterval = 250;
+  long tmLastPoint;
+  int ixLastPoint;
 };
 
 HistoryData historyCounter;
+ReportCounter reportCounter;
 
 int InitHistoryData()
 {
   memset(&historyCounter, 0, sizeof(historyCounter));
+  memset(&reportCounter, 0, sizeof(reportCounter));
 }
 
 float CalculateSlope()
@@ -67,19 +96,86 @@ float CalculateSlope()
 }
 void HandleDataReport(float flWheelSpeed, float flValue)
 {
+  float flNewSlope = CalculateSlope();
+  noInterrupts();
   historyCounter.rgSpeeds[historyCounter.ixUpdatePoint] = flWheelSpeed;
   historyCounter.rgValues[historyCounter.ixUpdatePoint] = flValue;
   historyCounter.ixUpdatePoint = (historyCounter.ixUpdatePoint + 1) % HistoryData::kCount;
 
   historyCounter.cForcePoints = max(historyCounter.cForcePoints, historyCounter.ixUpdatePoint);
+  historyCounter.flLastSlope = flNewSlope;
+  historyCounter.flLastPower = flValue;
+  historyCounter.flLastSpeed = flWheelSpeed;
+
+  interrupts();
 
 }
 ////////////////////////////////////////////////////
 ////////////////////////////////////////////////////
 ////////////////////////////////////////////////////
+bool ShouldSendCheck(long* ptmLast, long tmNow, int tmInterval)
+{
+  if(tmNow > ((*ptmLast) + tmInterval))
+  {
+    *ptmLast = tmNow;
+    return true;
+  }
+  return false;
+}
+void HandleDataTx(long tmNow) 
+{
+  noInterrupts();
+  float localLastPower = historyCounter.flLastPower;
+  float localLastSlope = historyCounter.flLastSlope;
+  float localLastSpeed = historyCounter.flLastSpeed;
 
+  float flPointX = historyCounter.rgSpeeds[reportCounter.ixLastPoint];
+  float flPointY = historyCounter.rgValues[reportCounter.ixLastPoint];
+  interrupts();
+  if(ShouldSendCheck(&reportCounter.tmLastPower, tmNow, reportCounter.powerInterval)) 
+  {
+    Serial.print(ReportCounter::POWER_CODE);
+    Serial.print(":");
+    Serial.println(localLastPower);
+  }
+  if(ShouldSendCheck(&reportCounter.tmLastSlope, tmNow, reportCounter.slopeInterval)) 
+  {
+    Serial.print(ReportCounter::SLOPE_CODE);
+    Serial.print(":");
+    Serial.println(localLastSlope);
+  }
+  if(ShouldSendCheck(&reportCounter.tmLastCount, tmNow, reportCounter.countInterval)) 
+  {
+    Serial.print(ReportCounter::WHEELTURNS_CODE);
+    Serial.print(":");
+    Serial.println(0);
+  }
+  if(ShouldSendCheck(&reportCounter.tmLastSpeed, tmNow, reportCounter.speedInterval)) 
+  {
+    Serial.print(ReportCounter::SPEED_CODE);
+    Serial.print(":");
+    Serial.println(localLastSpeed);
+  }
+  if(historyCounter.cForcePoints > 0 && ShouldSendCheck(&reportCounter.tmLastPoint, tmNow, reportCounter.pointInterval)) 
+  {
+    reportCounter.ixLastPoint++;
+    if(reportCounter.ixLastPoint >= historyCounter.cForcePoints)
+    {
+      reportCounter.ixLastPoint = 0;
+    }
+    Serial.print(ReportCounter::POINT_CODE);
+    Serial.print(":");
+    Serial.print(flPointX);
+    Serial.print(",");
+    Serial.print(flPointY);
+    Serial.print(",");
+    Serial.println(reportCounter.ixLastPoint);
+  }
+}
 
 void setup() {
+  delay(2000); // make sure we have a chance to re-upload stuff before this thing starts hammering on the serial port
+  
   Serial.begin(115200); //  setup serial baudrate
   attachInterrupt(0, countWheel, FALLING);
 
@@ -101,6 +197,7 @@ float getCurrentStrain()
   return load_Strain1;
 }
 
+
 void loop() 
 {
   loops++;
@@ -113,48 +210,10 @@ void loop()
     cStrainsSinceLastStore++;
     interrupts();
   }
-  
+
   // millis returns the number of milliseconds since the board started the current program
   const long tmNow = millis();
-  if(tmNow > time_step+lastPrintTime && cRpmsSinceLastPrint > 0) {
-    
-    // get the RPM, convert RPM to power
-    float flRPMNow = flRpmSumSinceLastPrint / cRpmsSinceLastPrint;
-    flRpmSumSinceLastPrint = 0;
-    cRpmsSinceLastPrint = 0;
-    
-    float flSlopeNow = CalculateSlope();
-    float flImpliedPower = flRPMNow * flSlopeNow;
-    
-    
-    Serial.print(loops);
-    Serial.print("\t");
-    Serial.print(tmNow);
-    Serial.print("\t");
-    Serial.print(flRPMNow);
-    Serial.print("\t");
-    Serial.print(flImpliedPower);
-    Serial.print("\t");
-    Serial.print(flSlopeNow);
-    Serial.print("\t");
-    Serial.print(historyCounter.cForcePoints);
-    Serial.print("\t");
-    Serial.println(historyCounter.ixUpdatePoint);
-    
-    if(historyCounter.ixUpdatePoint == 99)
-    {
-      for(int x = 0;x < historyCounter.ixUpdatePoint; x++)
-      {
-        Serial.print(historyCounter.rgSpeeds[x]);
-        Serial.print("\t");
-        Serial.println(historyCounter.rgValues[x]);
-      }
-      historyCounter.ixUpdatePoint = 0;
-    }
-    
-    
-    lastPrintTime = tmNow;
-  }
+  HandleDataTx(tmNow);
 }
 void countWheel()
 {
@@ -168,15 +227,8 @@ void countWheel()
       float rpmW = 60.*1000000./((float)dtW);
       rpmW /= kHolesPerWheel;
       
-      {
-        noInterrupts();
-        cRpmsSinceLastPrint++;
-        flRpmSumSinceLastPrint += rpmW;
-        
-        cRpmsSinceLastStore++;
-        flRpmSumSinceLastStore += rpmW;
-        interrupts();
-      }
+      cRpmsSinceLastStore++;
+      flRpmSumSinceLastStore += rpmW;
       
       if(cRpmsSinceLastStore > 10)
       {
