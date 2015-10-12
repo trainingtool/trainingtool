@@ -32,7 +32,7 @@ public class MainActivity  extends BlunoLibrary {
 
             @Override
             public void onClick(View v) {
-                buttonScanOnClickProcess();										//Alert Dialog for selecting the BLE device
+                buttonScanOnClickProcess();                                        //Alert Dialog for selecting the BLE device
             }
         }); // end setOnClickListener
 
@@ -152,33 +152,33 @@ public class MainActivity  extends BlunoLibrary {
         if(strTypeAndArgs.length > 1) {
             String strType = strTypeAndArgs[0];
             String[] rgArgs = strTypeAndArgs[1].split(",");
-            int iType = Integer.parseInt(strType);
+            int iType = D.tryParseInt(strType, -1);
             switch(iType) {
                 case TrainerState.WHEELTURNS:
                     // single arg:
                     if(rgArgs.length >= 1) {
-                        int cWheelTurns = Integer.parseInt(rgArgs[0]);
+                        int cWheelTurns = D.tryParseInt(rgArgs[0]);
                         mTrainerState.setWheelTurns(cWheelTurns);
                     }
                     break;
                 case TrainerState.SLOPE:
                     // single floating arg
                     if(rgArgs.length >= 1) {
-                        float flSlope = Float.parseFloat(rgArgs[0]);
+                        float flSlope = D.tryParseFloat(rgArgs[0]);
                         mTrainerState.setSlope(flSlope);
                     }
                     break;
                 case TrainerState.SPEED:
                     // single floating arg indicating speed in m/s
                     if(rgArgs.length >= 1) {
-                        float speed = Float.parseFloat(rgArgs[0]);
+                        float speed = D.tryParseFloat(rgArgs[0]);
                         mTrainerState.setSpeed(speed);
                     }
                     break;
                 case TrainerState.POWER:
                     // single floating arg indicating power in W
                     if(rgArgs.length >= 1) {
-                        float power = Float.parseFloat(rgArgs[0]);
+                        float power = D.tryParseFloat(rgArgs[0]);
                         mTrainerState.setPower(power);
                     }
                     break;
@@ -186,9 +186,9 @@ public class MainActivity  extends BlunoLibrary {
                     // two floats, then an int
                     // <speed m/s> <power W> <index>
                     if(rgArgs.length >= 3) {
-                        float speed = Float.parseFloat(rgArgs[0]);
-                        float power = Float.parseFloat(rgArgs[1]);
-                        int index = Integer.parseInt(rgArgs[2]);
+                        float speed = D.tryParseFloat(rgArgs[0]);
+                        float power = D.tryParseFloat(rgArgs[1]);
+                        int index = D.tryParseInt(rgArgs[2]);
                         mTrainerState.addPoint(speed, power, index);
                     }
                     break;
@@ -228,7 +228,19 @@ public class MainActivity  extends BlunoLibrary {
             this.parseSerial(TrainerState.WHEELTURNS + ":" + cPoint);
         }*/
         D.p("String: '" + theString + "'");
-        parseSerial(theString);
+        theString = theString.replace("\r\n","\n"); // just do single-separaters...
+        String[] rgLines = theString.split("\n");
+        for(int x = 0;x < rgLines.length; x++)
+        {
+            try
+            {
+                parseSerial(rgLines[x]);
+            }
+            catch(Exception e)
+            {
+                // the world will live on...
+            }
+        }
 
         refreshUI();
         mSlopeChart.invalidate();
