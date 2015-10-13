@@ -7,7 +7,6 @@ const int kHolesPerWheel = 2;
 
 
 
-unsigned long lastWheelTime = 0;
 
 unsigned long cRpmsSinceLastStore = 0;
 float flRpmSumSinceLastStore = 0;
@@ -97,7 +96,6 @@ float CalculateSlope()
 void HandleDataReport(float flWheelSpeed, float flValue)
 {
   float flNewSlope = CalculateSlope();
-  noInterrupts();
   historyCounter.rgSpeeds[historyCounter.ixUpdatePoint] = flWheelSpeed;
   historyCounter.rgValues[historyCounter.ixUpdatePoint] = flValue;
   historyCounter.ixUpdatePoint = (historyCounter.ixUpdatePoint + 1) % HistoryData::kCount;
@@ -106,9 +104,6 @@ void HandleDataReport(float flWheelSpeed, float flValue)
   historyCounter.flLastSlope = flNewSlope;
   historyCounter.flLastPower = flValue;
   historyCounter.flLastSpeed = flWheelSpeed;
-
-  interrupts();
-
 }
 ////////////////////////////////////////////////////
 ////////////////////////////////////////////////////
@@ -124,25 +119,17 @@ bool ShouldSendCheck(long* ptmLast, long tmNow, int tmInterval)
 }
 void HandleDataTx(long tmNow) 
 {
-  noInterrupts();
-  float localLastPower = historyCounter.flLastPower;
-  float localLastSlope = historyCounter.flLastSlope;
-  float localLastSpeed = historyCounter.flLastSpeed;
-
-  float flPointX = historyCounter.rgSpeeds[reportCounter.ixLastPoint];
-  float flPointY = historyCounter.rgValues[reportCounter.ixLastPoint];
-  interrupts();
   if(ShouldSendCheck(&reportCounter.tmLastPower, tmNow, reportCounter.powerInterval)) 
   {
     Serial.print(ReportCounter::POWER_CODE);
     Serial.print(":");
-    Serial.println(localLastPower);
+    Serial.println(historyCounter.flLastPower);
   }
   if(ShouldSendCheck(&reportCounter.tmLastSlope, tmNow, reportCounter.slopeInterval)) 
   {
     Serial.print(ReportCounter::SLOPE_CODE);
     Serial.print(":");
-    Serial.println(localLastSlope);
+    Serial.println(historyCounter.flLastSlope);
   }
   if(ShouldSendCheck(&reportCounter.tmLastCount, tmNow, reportCounter.countInterval)) 
   {
@@ -154,7 +141,7 @@ void HandleDataTx(long tmNow)
   {
     Serial.print(ReportCounter::SPEED_CODE);
     Serial.print(":");
-    Serial.println(localLastSpeed);
+    Serial.println(historyCounter.flLastSpeed);
   }
   if(historyCounter.cForcePoints > 0 && ShouldSendCheck(&reportCounter.tmLastPoint, tmNow, reportCounter.pointInterval)) 
   {
@@ -163,6 +150,9 @@ void HandleDataTx(long tmNow)
     {
       reportCounter.ixLastPoint = 0;
     }
+    const float flPointX = historyCounter.rgSpeeds[reportCounter.ixLastPoint];
+    const float flPointY = historyCounter.rgValues[reportCounter.ixLastPoint];
+    
     Serial.print(ReportCounter::POINT_CODE);
     Serial.print(":");
     Serial.print(flPointX);
@@ -198,58 +188,65 @@ float getCurrentStrain()
 }
 
 
+// logic keeping track of wheel hits
+unsigned long g_tmLastWheelHit=0; // microtime of the last wheel hit
+unsigned int g_cWheelHits=0; // how many wheels hits have gone by since our last check?
+
+unsigned long g_lastWheelTime = 0;
+void processWheelHit(int cWheelHits, const unsigned long curMicroWheel)
+{
+  const unsigned long tmSinceLastProcess = curMicroWheel-g_lastWheelTime;
+  
+  if(tmSinceLastProcess > 50000 && cStrainsSinceLastStore > 0) // >50000 so we don't get spurious readings, cStrains so we don't do this report unless we also have strain data
+  {
+    float rpmW = cWheelHits*60.*1000000./((float)tmSinceLastProcess);
+    rpmW /= kHolesPerWheel;
+    
+    float flStrainNowKg=0;
+    {
+      flStrainNowKg = flStrainSumSinceLastStore / cStrainsSinceLastStore;
+      cStrainsSinceLastStore = 0;
+      flStrainSumSinceLastStore = 0;
+    }
+    const float flStrainNowN = flStrainNowKg*9.8;
+    const float flSpeedNowMs = rpmW / 60 * 0.7*3.14159;
+    const float flPowerNow = flStrainNowN*flSpeedNowMs;
+      
+     
+    HandleDataReport(rpmW, flPowerNow);
+    g_lastWheelTime = curMicroWheel;
+  }
+}
+
 void loop() 
 {
   loops++;
   
   float flCurrentStrain = getCurrentStrain();
+  flStrainSumSinceLastStore += flCurrentStrain;
+  cStrainsSinceLastStore++;
   
   {
     noInterrupts();
-    flStrainSumSinceLastStore += flCurrentStrain;
-    cStrainsSinceLastStore++;
+    unsigned long tmLastWheelHit = g_tmLastWheelHit;
+    int cWheelHitsToProcess = g_cWheelHits;
+    g_cWheelHits = 0; // clear out the count of wheel hits that have gone by
     interrupts();
+    
+    if(cWheelHitsToProcess > 0)
+    {
+      processWheelHit(cWheelHitsToProcess, tmLastWheelHit);
+    }
   }
-
+  
   // millis returns the number of milliseconds since the board started the current program
   const long tmNow = millis();
   HandleDataTx(tmNow);
 }
 void countWheel()
 {
-    const unsigned long curMicroWheel = micros();
-    
-    const unsigned long dtW = curMicroWheel-lastWheelTime;
-    lastWheelTime = curMicroWheel;
-    
-    if(dtW > 50000) // >50000 so we don't get spurious readings
-    {
-      float rpmW = 60.*1000000./((float)dtW);
-      rpmW /= kHolesPerWheel;
-      
-      cRpmsSinceLastStore++;
-      flRpmSumSinceLastStore += rpmW;
-      
-      if(cRpmsSinceLastStore > 10)
-      {
-        const float flRpmNow = flRpmSumSinceLastStore / cRpmsSinceLastStore;
-        cRpmsSinceLastStore = 0;
-        flRpmSumSinceLastStore = 0;
-        
-        float flStrainNowKg=0;
-        {
-          noInterrupts();
-          flStrainNowKg = flStrainSumSinceLastStore / cStrainsSinceLastStore;
-          cStrainsSinceLastStore = 0;
-          flStrainSumSinceLastStore = 0;
-          interrupts();
-        }
-        const float flStrainNowN = flStrainNowKg*9.8;
-        const float flSpeedNowMs = flRpmNow / 60 * 0.7*3.14159;
-        const float flPowerNow = flStrainNowN*flSpeedNowMs;
-        
-        HandleDataReport(flRpmNow, flPowerNow);
-      }
-    }
-    
+  noInterrupts();
+  g_tmLastWheelHit = micros();
+  g_cWheelHits++;
+  interrupts();
 }
