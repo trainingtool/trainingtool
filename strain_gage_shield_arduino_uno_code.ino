@@ -2,7 +2,6 @@
 
 // Put two known loads on the Strain Gauge sensor and write obtained values below :  (You can use Strain 1 or Strain 2 or the two Strains) 
 //constants:
-const int time_step = 250; // milliseconds between serial outputs
 const int kHolesPerWheel = 2;
 
 
@@ -184,15 +183,16 @@ void setup() {
   InitHistoryData();
 }
 
-float getCurrentStrain()
+float getCurrentStrainKg()
 {
-  const float ReadingA_Strain1 = 297.8;
-  const float LoadA_Strain1 = 0.0; //  (Kg,lbs..) 
-  const float ReadingB_Strain1 = 383.5;
-  const float LoadB_Strain1 = 5; //  (Kg,lbs..) 
+  const float ReadingA_Strain1 = 339.0; // analog reading when loaded to some fixed weight
+  const float LoadA_Strain1 = 0.0; // kg when loaded to ReadingA_Strain1
+  const float ReadingB_Strain1 = 449.0; // analog reading when loaded to another fixed weih]ght
+  const float LoadB_Strain1 = 1.351; // kg when loaded to ReadingB_Strain1
   const float slopeCalibration =  ((LoadB_Strain1 - LoadA_Strain1)/(ReadingB_Strain1 - ReadingA_Strain1));
 
   const float newReading_Strain1 = analogRead(0);  // analog in 0 for Strain 1
+  historyCounter.flLastStrain = newReading_Strain1;
   // Calculate load by interpolation 
   const float load_Strain1 = slopeCalibration * (newReading_Strain1 - ReadingA_Strain1) + LoadA_Strain1;
   
@@ -283,11 +283,10 @@ void loop()
 {
   loops++;
   
-  float flCurrentStrain = getCurrentStrain();
+  float flCurrentStrain = getCurrentStrainKg();
   flStrainSumSinceLastStore += flCurrentStrain;
   cStrainsSinceLastStore++;
 
-  historyCounter.flLastStrain = flCurrentStrain;
   
   {
     noInterrupts();
