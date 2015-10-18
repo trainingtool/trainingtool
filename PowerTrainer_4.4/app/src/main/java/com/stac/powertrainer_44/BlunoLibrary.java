@@ -22,6 +22,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
+import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -30,9 +31,10 @@ import android.widget.BaseAdapter;
 import android.widget.TextView;
 import android.widget.Toast;
 
-public abstract  class BlunoLibrary  extends Activity{
+public abstract  class BlunoLibrary  extends ActionBarActivity {
 
     private Context mainContext=this;
+
 
 
 //	public BlunoLibrary(Context theContext) {
@@ -45,6 +47,12 @@ public abstract  class BlunoLibrary  extends Activity{
     public void serialSend(String theString){
         if (mConnectionState == connectionStateEnum.isConnected) {
             mSCharacteristic.setValue(theString);
+            mBluetoothLeService.writeCharacteristic(mSCharacteristic);
+        }
+    }
+    public void serialSendBytes(byte rgBytes[]) {
+        if (mConnectionState == connectionStateEnum.isConnected) {
+            mSCharacteristic.setValue(rgBytes);
             mBluetoothLeService.writeCharacteristic(mSCharacteristic);
         }
     }

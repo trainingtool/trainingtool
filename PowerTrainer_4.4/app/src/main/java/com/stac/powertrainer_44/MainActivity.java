@@ -1,12 +1,18 @@
 package com.stac.powertrainer_44;
 
+import android.app.ActionBar;
 import android.os.Bundle;
 import android.content.Intent;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.support.v7.widget.Toolbar;
+
 import com.stac.powertrainer_44.BlunoLibrary;
 
 import java.util.Vector;
@@ -18,6 +24,7 @@ public class MainActivity  extends BlunoLibrary {
     private EditText serialSendText;
     private TrainerState mTrainerState = new TrainerState();
     private SlopeChart mSlopeChart;
+    private boolean mStrainEnabled=false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -26,6 +33,8 @@ public class MainActivity  extends BlunoLibrary {
         onCreateProcess();														//onCreate Process by BlunoLibrary
 
         serialBegin(115200);													//set the Uart Baudrate on BLE chip to 115200
+
+        mStrainEnabled = false;
 
         buttonScan = (Button) findViewById(R.id.scan);					//initial the button for scanning the BLE device
         buttonScan.setOnClickListener(new OnClickListener() {
@@ -37,6 +46,34 @@ public class MainActivity  extends BlunoLibrary {
         }); // end setOnClickListener
 
         mSlopeChart = (SlopeChart)findViewById(R.id.viewChart);
+
+        Toolbar mToolbar = (Toolbar) findViewById(R.id.toolbar);
+
+        setSupportActionBar(mToolbar);
+        getSupportActionBar().setDisplayShowTitleEnabled(false);
+        //configureToolbar(mToolbar);
+    }
+
+    // note: the arduino code constants are the master for these
+    private static final byte SENDVERB_SET_STRAIN = 1;
+
+    private void toggleStrain() {
+        byte rgSend[] = new byte[4];
+        rgSend[0] = (byte)0xfe;
+        rgSend[1] = (byte)0xef;
+        rgSend[2] = SENDVERB_SET_STRAIN;
+        rgSend[3] = (byte)(mStrainEnabled ? 0 : 1);
+        mStrainEnabled = !mStrainEnabled;
+
+        this.serialSendBytes(rgSend);
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.menu_main, menu);
+
+        return true;
     }
 
     protected void onResume(){
@@ -45,7 +82,14 @@ public class MainActivity  extends BlunoLibrary {
         onResumeProcess();														//onResume Process by BlunoLibrary
     }
 
-
+    public boolean onOptionsItemSelected (MenuItem item) {
+        switch(item.getItemId()) {
+            case R.id.toggle_strain:
+                this.toggleStrain();
+                break;
+        }
+        return true;
+    }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -96,17 +140,20 @@ public class MainActivity  extends BlunoLibrary {
 
     private class TrainerState
     {
+        // note: the arduino code constants are the master for these
         public static final int POWER = 0;
         public static final int SPEED = 1;
         public static final int POINT = 2;
         public static final int SLOPE = 3;
         public static final int WHEELTURNS = 4;
+        public static final int STRAIN = 5;
 
         private int cWheelTurns;
         private float flEstimatedSlope; // slope for y=mx, where x = speed, y = watts
         private Vector<XYPoint> lstPoints = new Vector<XYPoint>();
         private float flLastPower;
         private float flLastSpeed;
+        private float flLastStrain;
 
         public float getSpeedMs() {
             return flLastSpeed;
@@ -123,6 +170,8 @@ public class MainActivity  extends BlunoLibrary {
         public Vector<XYPoint> getPointData() {
             return lstPoints;
         }
+        public float getStrain() {return flLastStrain;}
+
         public void addPoint(float speed, float watts, int index)
         {
             if(lstPoints.size() == index) {
@@ -145,6 +194,7 @@ public class MainActivity  extends BlunoLibrary {
         public void setSlope(float slope) {
             this.flEstimatedSlope = slope;
         }
+        public void setStrain(float strain) {this.flLastStrain = strain;}
     }
 
     public void parseSerial(String str) {
@@ -182,6 +232,13 @@ public class MainActivity  extends BlunoLibrary {
                         mTrainerState.setPower(power);
                     }
                     break;
+                case TrainerState.STRAIN:
+                    // single float indicating last strain reading
+                    if(rgArgs.length >= 1) {
+                        float strain = D.tryParseFloat(rgArgs[0]);
+                        mTrainerState.setStrain(strain);
+                    }
+                    break;
                 case TrainerState.POINT:
                     // two floats, then an int
                     // <speed m/s> <power W> <index>
@@ -201,11 +258,20 @@ public class MainActivity  extends BlunoLibrary {
         TextView tvSpeed = (TextView)this.findViewById(R.id.txtSpeed);
         TextView tvSlope = (TextView)this.findViewById(R.id.txtSlope);
         TextView tvTurns = (TextView)this.findViewById(R.id.txtTurns);
+        TextView tvStrain = (TextView)this.findViewById(R.id.txtStrain);
 
         tvPower.setText("Power: " + (int)mTrainerState.getPower() + "W");
         tvSpeed.setText("Speed: " + String.format("%.1f",mTrainerState.getSpeedMs()*3.6) + "km/h");
         tvSlope.setText("Slope: " + String.format("%.2f",mTrainerState.getSlope()) + "W/m/s");
         tvTurns.setText("Turns: " + (int)mTrainerState.getTurns() + "");
+
+        if(mStrainEnabled) {
+            tvStrain.setVisibility(View.VISIBLE);
+            tvStrain.setText("Strain: " + (int)mTrainerState.getStrain() + "");
+        } else {
+            tvStrain.setVisibility(View.GONE);
+        }
+
 
         mSlopeChart.setChartData(mTrainerState.getPointData(), mTrainerState.getSlope());
     }

@@ -20,7 +20,7 @@
     <string name="menu_disconnect">Disconnect</string>
     <string name="menu_scan">Scan</string>
     <string name="menu_stop">Stop</string>
-    <string name="action_settings">Action settings</string>
+    <string name="toggle_strain">Toggle Strain Sending</string>
 
 
 </resources>

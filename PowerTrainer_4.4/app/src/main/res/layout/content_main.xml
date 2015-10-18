@@ -51,6 +51,14 @@
             android:id="@+id/txtSlope"
             android:textSize="@dimen/power_label" />
 
+        <TextView
+            android:text="Strain"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/txtStrain"
+            android:textSize="@dimen/power_label"
+            android:visibility="gone" />
+
         <com.stac.powertrainer_44.SlopeChart
             android:background="#ccc"
             android:layout_width="match_parent"

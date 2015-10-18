@@ -7,6 +7,10 @@ public class D {
     public static void p(String str) {
         System.out.println(str);
     }
+    public static void ass(boolean f) {
+        byte rg[] = new byte[10];
+        rg[11] = (byte)5;
+    }
     public static int tryParseInt(String str, int def)
     {
         try
