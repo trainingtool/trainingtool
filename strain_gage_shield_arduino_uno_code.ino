@@ -41,6 +41,7 @@ struct HistoryData {
   float flLastSlope;
   float flLastPower;
   float flLastSpeed;
+  float flLastStrain;
 };
 
 // keeps track of the last time we sent each bit of data
@@ -66,6 +67,11 @@ struct ReportCounter
   const static int pointInterval = 250;
   long tmLastPoint;
   int ixLastPoint;
+
+  const static int STRAIN_CODE = 5;
+  const static int strainInterval = 750;
+  long tmLastStrain;
+  bool fSendingStrain; // sending strain is optional
 };
 
 HistoryData historyCounter;
@@ -143,6 +149,12 @@ void HandleDataTx(long tmNow)
     Serial.print(":");
     Serial.println(historyCounter.flLastSpeed);
   }
+  if(reportCounter.fSendingStrain && ShouldSendCheck(&reportCounter.tmLastStrain, tmNow, reportCounter.strainInterval)) 
+  {
+    Serial.print(ReportCounter::STRAIN_CODE);
+    Serial.print(":");
+    Serial.println(historyCounter.flLastStrain, 6);
+  }
   if(historyCounter.cForcePoints > 0 && ShouldSendCheck(&reportCounter.tmLastPoint, tmNow, reportCounter.pointInterval)) 
   {
     reportCounter.ixLastPoint++;
@@ -218,6 +230,55 @@ void processWheelHit(int cWheelHits, const unsigned long curMicroWheel)
   }
 }
 
+bool Rx_WaitForByte(byte target)
+{
+  while(Serial.available())
+  {
+    byte check = Serial.read();
+    if(check == target)
+    {
+      return true; // sucess!
+    }
+  }
+  return false; // we ran out of bytes without finding the target
+}
+
+const static byte SET_SEND_STRAIN = 1; // param is 1 byte, indicating whether we want to send strain
+void Rx_HandleVerb(byte verb, byte param)
+{
+  switch(verb)
+  {
+    case SET_SEND_STRAIN:
+      reportCounter.fSendingStrain = param;
+      break;
+  }
+}
+void HandleDataRx()
+{
+  // from-phone data transmission is:
+  // check1: 0xfe
+  // check2: 0xef
+  // verb: 0x__ (the "verb" we want to do)
+  // param: 0x__ (a byte of parameter for that verb.   I guess there could be more byte, verb-dependent)
+  const static byte bCheck1 = 0xfe;
+  const static byte bCheck2 = 0xef;
+  
+  int cAvailable = Serial.available();
+  while(cAvailable >= 4)
+  {
+    if(Rx_WaitForByte(bCheck1) && Rx_WaitForByte(bCheck2) && Serial.available() >= 2)
+    {
+      // we found the check bytes and there's still data left!
+      byte verb = Serial.read();
+      byte param = Serial.read();
+      Rx_HandleVerb(verb, param);
+    }
+
+    
+    cAvailable = Serial.available();
+  }
+}
+
 void loop() 
 {
   loops++;
@@ -225,6 +286,8 @@ void loop()
   float flCurrentStrain = getCurrentStrain();
   flStrainSumSinceLastStore += flCurrentStrain;
   cStrainsSinceLastStore++;
+
+  historyCounter.flLastStrain = flCurrentStrain;
   
   {
     noInterrupts();
@@ -238,6 +301,8 @@ void loop()
       processWheelHit(cWheelHitsToProcess, tmLastWheelHit);
     }
   }
+
+  HandleDataRx();
   
   // millis returns the number of milliseconds since the board started the current program
   const long tmNow = millis();
