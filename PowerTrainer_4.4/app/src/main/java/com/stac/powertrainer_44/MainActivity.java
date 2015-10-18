@@ -267,7 +267,7 @@ public class MainActivity  extends BlunoLibrary {
 
         if(mStrainEnabled) {
             tvStrain.setVisibility(View.VISIBLE);
-            tvStrain.setText("Strain: " + (int)mTrainerState.getStrain() + "");
+            tvStrain.setText("Strain: " + mTrainerState.getStrain() + "");
         } else {
             tvStrain.setVisibility(View.GONE);
         }
