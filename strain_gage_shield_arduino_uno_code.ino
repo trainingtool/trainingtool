@@ -21,6 +21,13 @@ unsigned int loops = 0;
 
 long lastPrintTime = 0;
 
+
+
+int lastAnalogSpeedReading = -1;
+bool fSpeedReadingLow = 0;
+const static int speedReadingGoingHigh = 400;
+const static int speedReadingGoingLow = 200;
+
 //////////////////////////////
 ////////////////////////////
 // linear regression for speed->power
@@ -178,7 +185,7 @@ void setup() {
   delay(2000); // make sure we have a chance to re-upload stuff before this thing starts hammering on the serial port
   
   Serial.begin(115200); //  setup serial baudrate
-  attachInterrupt(0, countWheel, FALLING);
+  //attachInterrupt(0, countWheel, FALLING);
 
   InitHistoryData();
 }
@@ -192,7 +199,7 @@ float getCurrentStrainKg()
   const float slopeCalibration =  ((LoadB_Strain1 - LoadA_Strain1)/(ReadingB_Strain1 - ReadingA_Strain1));
 
   const float newReading_Strain1 = analogRead(0);  // analog in 0 for Strain 1
-  historyCounter.flLastStrain = newReading_Strain1;
+  //historyCounter.flLastStrain = newReading_Strain1;
   // Calculate load by interpolation 
   const float load_Strain1 = slopeCalibration * (newReading_Strain1 - ReadingA_Strain1) + LoadA_Strain1;
   
@@ -287,6 +294,26 @@ void loop()
   flStrainSumSinceLastStore += flCurrentStrain;
   cStrainsSinceLastStore++;
 
+  {
+    int analogReading = analogRead(5);
+    historyCounter.flLastStrain = analogReading;
+    if(fSpeedReadingLow)
+    {
+      // if the speed reading was presently low, we need to watch for it going high
+      if(analogReading > speedReadingGoingHigh)
+      {
+        fSpeedReadingLow = false;
+        countWheel();
+      }
+    }
+    else
+    {
+      if(analogReading < speedReadingGoingHigh)
+      {
+        fSpeedReadingLow = true;
+      }
+    }
+  }
   
   {
     noInterrupts();
